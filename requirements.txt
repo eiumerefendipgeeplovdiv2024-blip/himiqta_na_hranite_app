@@ -1,1 +1,4 @@
-pip install streamlit easyocr pillow opencv-python-headless
+streamlit 
+easyocr 
+pillow 
+opencv-python-headless

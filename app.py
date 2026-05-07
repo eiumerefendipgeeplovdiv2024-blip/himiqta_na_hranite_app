@@ -3,68 +3,69 @@ import easyocr
 from PIL import Image
 import numpy as np
 
-st.set_page_config(page_title="Health Scanner OCR", page_icon="🥗")
-
-# 1. Дефиниране на списъци със съставки
-# Можеш да ги разшириш по твой избор
-BAD_INGREDIENTS = [
-    "захар", "sugar", "палмово масло", "palm oil", "e621", "msg", 
-    "аспартам", "aspartame", "консервант", "preservative", "оцветител"
-]
-GOOD_INGREDIENTS = [
-    "витамин", "vitamin", "протеин", "protein", "фибри", "fiber", 
-    "омега", "omega", "магнезий", "magnesium", "натурално", "natural"
+# Списък с примерни "вредни" съставки (може да бъде разширен)
+DANGEROUS_INGREDIENTS = [
+    "E621", "monosodium glutamate", "мононатриев глутамат",
+    "palm oil", "палмово масло", "палмова мазнина",
+    "high fructose corn syrup", "глюкозо-фруктозен сироп",
+    "aspartame", "аспартам", "E951",
+    "hydrogenated fat", "хидрогенирани мазнини"
 ]
 
-@st.cache_resource
-def load_model():
-    return easyocr.Reader(['bg', 'en'], gpu=False)
+def process_image(image):
+    # Инициализиране на OCR (зарежда модела при първо извикване)
+    reader = easyocr.Reader(['bg', 'en'])
+    
+    # Конвертиране на PIL изображението в numpy array за EasyOCR
+    img_array = np.array(image)
+    
+    with st.spinner('Анализиране на текста...'):
+        results = reader.readtext(img_array, detail=0)
+    return results
 
-reader = load_model()
+def check_for_ingredients(text_list):
+    found = []
+    # Обединяваме целия текст в един низ за по-лесно търсене
+    full_text = " ".join(text_list).lower()
+    
+    for ingredient in DANGEROUS_INGREDIENTS:
+        if ingredient.lower() in full_text:
+            found.append(ingredient)
+    return found
 
-st.title("🥗 Анализатор на съставки")
-st.write("Качете снимка на етикет, за да проверим съдържанието.")
+# --- STREAMLIT UI ---
+st.set_page_config(page_title="Скенер за съставки", page_icon="🔍")
+st.title("🔍 Скенер за вредни съставки")
+st.write("Качете снимка на етикета или използвайте камерата си.")
 
-uploaded_file = st.file_uploader("Избери снимка...", type=["jpg", "jpeg", "png"])
+# Опции за източник на изображението
+source_option = st.radio("Изберете източник:", ("Качване на файл", "Камера"))
+
+uploaded_file = None
+if source_option == "Качване на файл":
+    uploaded_file = st.file_uploader("Изберете снимка...", type=["jpg", "jpeg", "png"])
+else:
+    uploaded_file = st.camera_input("Направете снимка на етикета")
 
 if uploaded_file is not None:
     image = Image.open(uploaded_file)
-    st.image(image, caption='Етикет за анализ', use_container_width=True)
+    st.image(image, caption='Вашата снимка', use_column_width=True)
     
-    with st.spinner('Анализиране...'):
-        img_array = np.array(image)
-        results = reader.readtext(img_array)
+    if st.button('Анализирай състава'):
+        extracted_text = process_image(image)
         
-        if results:
-            # Обединяваме целия текст и го правим с малки букви за по-лесно търсене
-            full_text = " ".join([res[1].lower() for res in results])
+        if extracted_text:
+            st.subheader("Разпознат текст:")
+            st.info(" ".join(extracted_text))
             
-            # Логика за сортиране
-            found_bad = [item for item in BAD_INGREDIENTS if item in full_text]
-            found_good = [item for item in GOOD_INGREDIENTS if item in full_text]
-
-            # Визуализация с колони
-            st.subheader("📊 Резултати от анализа")
-            col1, col2 = st.columns(2)
-
-            with col1:
-                st.error("⚠️ Вредни / Спорни")
-                if found_bad:
-                    for item in found_bad:
-                        st.write(f"❌ {item.capitalize()}")
-                else:
-                    st.write("Не са открити критични съставки.")
-
-            with col2:
-                st.success("✅ Полезни / Позитивни")
-                if found_good:
-                    for item in found_good:
-                        st.write(f"⭐ {item.capitalize()}")
-                else:
-                    st.write("Няма открити специфични полезни съставки.")
-
-            st.write("---")
-            with st.expander("Виж целия разпознат текст"):
-                st.text(full_text)
+            # Проверка за съставки
+            found_bad_stuff = check_for_ingredients(extracted_text)
+            
+            st.divider()
+            
+            if found_bad_stuff:
+                st.error(f"⚠️ Внимание! Открити са следните съставки: {', '.join(found_bad_stuff)}")
+            else:
+                st.success("✅ Не бяха открити съставки от списъка с вредни вещества.")
         else:
-            st.warning("Не можах да разчета текст. Опитайте с по-чиста снимка.")
+            st.warning("Не беше открит текст на снимката. Опитайте с по-добро осветление.")

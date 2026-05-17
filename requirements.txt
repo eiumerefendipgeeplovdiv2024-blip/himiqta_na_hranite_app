@@ -1,5 +1,5 @@
-streamlit 
-easyocr 
-pillow 
-numpy
-cv2
+streamlit
+easyocr
+pillow
+pandas
+opencv-python-headless
